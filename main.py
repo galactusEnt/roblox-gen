@@ -1,18 +1,22 @@
 import requests
 
-HF_API_TOKEN = "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"
-MODEL_URL = "https://api-inference.huggingface.co/models/bigscience/bloomz-560m"
-
+API_URL = "https://router.huggingface.co/fireworks-ai/inference/v1/chat/completions"
 headers = {
-    "Authorization": f"Bearer {HF_API_TOKEN}"
+    "Authorization": "Bearer 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",
 }
 
-data = {
-    "inputs": "Create a Lua table of a 3D flower model made from parts with color and position."
-}
+def query(payload):
+    response = requests.post(API_URL, headers=headers, json=payload)
+    return response.json()
 
-response = requests.post(MODEL_URL, headers=headers, json=data)
+response = query({
+    "messages": [
+        {
+            "role": "user",
+            "content": "What is the capital of France?"
+        }
+    ],
+    "model": "accounts/fireworks/models/deepseek-r1"
+})
 
-print("Status Code:", response.status_code)
-print("Response:")
-print(response.text)
+print(response["choices"][0]["message"])
