@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify
 import requests
 import os
+import re
 
 app = Flask(__name__)
 
@@ -43,7 +44,12 @@ def generate():
             return jsonify({"error": "Failed to fetch from Hugging Face", "details": response.text}), 500
 
         result = response.json()
-        message = result["choices"][0]["message"]["content"]
+        raw = result["choices"][0]["message"]["content"]
+
+        # Extract Lua code using regex
+        matches = re.findall(r"(local\s+\w+\s*=\s*{[\s\S]*?})", raw)
+        
+        message = matches[0] if matches else raw  # fallback if no match
 
         return jsonify({"model": message})
 
