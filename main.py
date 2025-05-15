@@ -1,7 +1,7 @@
 import requests
 
-HF_API_TOKEN = "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"
-MODEL_URL = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.1"
+HF_API_TOKEN = "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"
+MODEL_URL = "https://api-inference.huggingface.co/models/bigscience/bloomz-560m"
 
 headers = {
     "Authorization": f"Bearer {HF_API_TOKEN}"
