@@ -1,8 +1,12 @@
 from flask import Flask, request, jsonify
 import requests
-import re
+import logging
 
 app = Flask(__name__)
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 API_URL = "https://router.huggingface.co/fireworks-ai/inference/v1/chat/completions"
 HF_API_TOKEN = "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"
@@ -14,38 +18,45 @@ HEADERS = {
 }
 
 SYSTEM_PROMPT = """You are a 3D model generator for Roblox. 
-When given a description, you will output a Lua table representing the model parts.
-Each part should have:
-1. Shape (Block, Ball, Cylinder)
-2. Color (as RGB values 0-255)
-3. Size (width, height, depth)
-4. Position (x, y, z relative to origin)
-5. Orientation (x, y, z rotation in degrees)
+Output ONLY a JSON array where each element represents a part with:
+- "Shape" (string: "Block", "Ball", or "Cylinder")
+- "Color" (array of 3 integers 0-255 [R,G,B])
+- "Size" (array of 3 numbers [width,height,depth])
+- "Position" (array of 3 numbers [X,Y,Z])
+- "Orientation" (array of 3 numbers [X-rot,Y-rot,Z-rot])
 
-Output ONLY the Lua table in this exact JSON-compatible format:
-{
-    "Parts": [
-        {
-            "Shape": "Block",
-            "Color": [255, 0, 0],
-            "Size": [2, 1, 2],
-            "Position": [0, 0.5, 0],
-            "Orientation": [0, 0, 0]
-        }
-    ]
-}
+Example output:
+[
+    {
+        "Shape": "Block",
+        "Color": [255, 0, 0],
+        "Size": [2, 1, 2],
+        "Position": [0, 0.5, 0],
+        "Orientation": [0, 0, 0]
+    }
+]
 
-Do not include any explanations or additional text. Only output the JSON-compatible Lua table."""
+Do not include any other text or explanations."""
 
 @app.route('/generate', methods=['POST'])
 def generate_model():
     try:
-        data = request.json
-        prompt = data.get('prompt', '')
+        logger.info("Received generation request")
         
+        # Get prompt from request
+        data = request.get_json()
+        if not data:
+            logger.error("No JSON data received")
+            return jsonify({"error": "Request body must be JSON"}), 400
+            
+        prompt = data.get('prompt')
         if not prompt:
-            return jsonify({"error": "No prompt provided"}), 400
+            logger.error("No prompt provided")
+            return jsonify({"error": "Prompt is required"}), 400
+
+        logger.info(f"Generating model with prompt: {prompt}")
         
+        # Call Hugging Face API
         payload = {
             "model": MODEL_NAME,
             "messages": [
@@ -55,34 +66,33 @@ def generate_model():
             "temperature": 0.3
         }
         
-        response = requests.post(API_URL, headers=HEADERS, json=payload)
-        response.raise_for_status()
+        hf_response = requests.post(API_URL, headers=HEADERS, json=payload, timeout=30)
+        hf_response.raise_for_status()
         
-        # Extract the AI's response
-        ai_response = response.json()['choices'][0]['message']['content']
+        # Process AI response
+        ai_response = hf_response.json()
+        content = ai_response['choices'][0]['message']['content']
         
-        # Clean the response to extract just the JSON portion
+        # Validate the response is proper JSON
         try:
-            # Find the first { and last } to extract the JSON
-            start_idx = ai_response.find('{')
-            end_idx = ai_response.rfind('}') + 1
-            json_str = ai_response[start_idx:end_idx]
+            # Try to parse the content to validate it's JSON
+            parsed = json.loads(content)
+            logger.info("Successfully generated model")
+            return content, 200, {'Content-Type': 'application/json'}
+        except ValueError as e:
+            logger.error(f"AI returned invalid JSON: {content}")
+            return jsonify({"error": "AI returned invalid format", "content": content}), 500
             
-            # Parse to validate it's proper JSON
-            parsed = json.loads(json_str)
-            
-            # Convert back to string with consistent formatting
-            clean_output = json.dumps(parsed, indent=2)
-            
-            return clean_output, 200, {'Content-Type': 'application/json'}
-            
-        except (ValueError, KeyError) as e:
-            return jsonify({"error": f"AI returned malformed response: {str(e)}"}), 500
-    
     except requests.exceptions.RequestException as e:
-        return jsonify({"error": f"Hugging Face API error: {str(e)}"}), 500
+        logger.error(f"Hugging Face API error: {str(e)}")
+        return jsonify({"error": f"Model generation service unavailable: {str(e)}"}), 503
     except Exception as e:
-        return jsonify({"error": f"Server error: {str(e)}"}), 500
+        logger.error(f"Unexpected error: {str(e)}", exc_info=True)
+        return jsonify({"error": "Internal server error"}), 500
+
+@app.route('/health', methods=['GET'])
+def health_check():
+    return jsonify({"status": "healthy"}), 200
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=10000)
