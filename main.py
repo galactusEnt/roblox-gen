@@ -1,6 +1,7 @@
 # main.py
 from flask import Flask, request, jsonify
 import requests
+import os
 
 app = Flask(__name__)
 
@@ -30,4 +31,5 @@ def generate():
         return jsonify({"error": str(e)}), 500
 
 
-app.run(host='0.0.0.0', port=3000)
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
