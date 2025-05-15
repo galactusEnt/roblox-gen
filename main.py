@@ -47,9 +47,7 @@ def generate():
         raw = result["choices"][0]["message"]["content"]
 
         # Extract Lua code using regex
-        matches = re.findall(r"(local\s+\w+\s*=\s*{[\s\S]*?})", raw)
-        
-        message = matches[0] if matches else raw  # fallback if no match
+        message = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
 
         return jsonify({"model": message})
 
